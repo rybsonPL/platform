@@ -26,7 +26,6 @@ describe('Effect Schematic', () => {
     feature: false,
     root: false,
     group: false,
-    creators: false,
     prefix: 'load',
   };
 
@@ -76,26 +75,19 @@ describe('Effect Schematic', () => {
     ).toBeGreaterThanOrEqual(0);
   });
 
-  it('should not be provided by default', async () => {
-    const options = { ...defaultOptions };
+  it('should respect the skipTests flag', async () => {
+    const options = { ...defaultOptions, skipTests: true };
 
     const tree = await schematicRunner
       .runSchematicAsync('effect', options, appTree)
       .toPromise();
-    const content = tree.readContent(`${projectPath}/src/app/app.module.ts`);
-    expect(content).not.toMatch(
-      /import { FooEffects } from '.\/foo\/foo.effects'/
-    );
-  });
-
-  it('should import into a specified module', async () => {
-    const options = { ...defaultOptions, module: 'app.module.ts' };
-
-    const tree = await schematicRunner
-      .runSchematicAsync('effect', options, appTree)
-      .toPromise();
-    const content = tree.readContent(`${projectPath}/src/app/app.module.ts`);
-    expect(content).toMatch(/import { FooEffects } from '.\/foo\/foo.effects'/);
+    const files = tree.files;
+    expect(
+      files.indexOf(`${projectPath}/src/app/foo/foo.effects.ts`)
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      files.indexOf(`${projectPath}/src/app/foo/foo.effects.spec.ts`)
+    ).toEqual(-1);
   });
 
   it('should fail if specified module does not exist', async () => {
@@ -112,19 +104,28 @@ describe('Effect Schematic', () => {
     expect(thrownError).toBeDefined();
   });
 
-  it('should respect the skipTests flag', async () => {
-    const options = { ...defaultOptions, skipTests: true };
+  it('should not be provided by default', async () => {
+    const options = { ...defaultOptions };
 
     const tree = await schematicRunner
       .runSchematicAsync('effect', options, appTree)
       .toPromise();
-    const files = tree.files;
-    expect(
-      files.indexOf(`${projectPath}/src/app/foo/foo.effects.ts`)
-    ).toBeGreaterThanOrEqual(0);
-    expect(
-      files.indexOf(`${projectPath}/src/app/foo/foo.effects.spec.ts`)
-    ).toEqual(-1);
+    const content = tree.readContent(`${projectPath}/src/app/app.module.ts`);
+
+    expect(content).not.toMatch(
+      /import { FooEffects } from '.\/foo\/foo.effects'/
+    );
+  });
+
+  it('should import into a specified module', async () => {
+    const options = { ...defaultOptions, module: 'app.module.ts' };
+
+    const tree = await schematicRunner
+      .runSchematicAsync('effect', options, appTree)
+      .toPromise();
+    const content = tree.readContent(`${projectPath}/src/app/app.module.ts`);
+
+    expect(content).toMatch(/import { FooEffects } from '.\/foo\/foo.effects'/);
   });
 
   it('should register the root effect in the provided module', async () => {
@@ -304,38 +305,31 @@ describe('Effect Schematic', () => {
       `${projectPath}/src/app/effects/foo/foo.effects.ts`
     );
 
-    expect(content).toMatch(
-      /import \{ FooActionTypes, FooActions } from '\.\.\/\.\.\/actions\/foo\/foo\.actions';/
+    expect(content).toMatchInlineSnapshot(`
+"import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+
+import { concatMap } from 'rxjs/operators';
+import { Observable, EMPTY } from 'rxjs';
+import * as FooActions from '../../actions/foo/foo.actions';
+
+@Injectable()
+export class FooEffects {
+
+
+  loadFoos$ = createEffect(() => {
+    return this.actions$.pipe(
+
+      ofType(FooActions.LoadFoos),
+      /** An EMPTY observable only emits completion. Replace with your own observable API request */
+      concatMap(() => EMPTY as Observable<{ type: string }>)
     );
   });
 
-  it('should create an effect that describes a source of actions within a feature', async () => {
-    const options = { ...defaultOptions, feature: true };
-
-    const tree = await schematicRunner
-      .runSchematicAsync('effect', options, appTree)
-      .toPromise();
-    const content = tree.readContent(
-      `${projectPath}/src/app/foo/foo.effects.ts`
-    );
-    expect(content).toMatch(
-      /import { Actions, Effect, ofType } from '@ngrx\/effects';/
-    );
-    expect(content).toMatch(/import { concatMap } from 'rxjs\/operators';/);
-    expect(content).toMatch(/import { Observable, EMPTY } from 'rxjs';/);
-    expect(content).toMatch(
-      /import { FooActionTypes, FooActions } from '\.\/foo.actions';/
-    );
-    expect(content).toMatch(/export class FooEffects/);
-    expect(content).toMatch(/loadFoos\$ = this\.actions\$.pipe\(/);
-    expect(content).toMatch(/ofType\(FooActionTypes\.LoadFoos\)/);
-    expect(content).toMatch(
-      /concatMap\(\(\) => EMPTY as Observable<\{ type: string \}>\)/
-    );
-
-    expect(content).toMatch(
-      /constructor\(private actions\$: Actions<FooActions>\) {}/
-    );
+  constructor(private actions$: Actions) {}
+}
+"
+`);
   });
 
   it('should create an effect that does not define a source of actions within the root', async () => {
@@ -347,16 +341,20 @@ describe('Effect Schematic', () => {
     const content = tree.readContent(
       `${projectPath}/src/app/foo/foo.effects.ts`
     );
-    expect(content).toMatch(
-      /import { Actions, Effect } from '@ngrx\/effects';/
-    );
-    expect(content).not.toMatch(
-      /import { FooActionTypes } from '\.\/foo.actions';/
-    );
-    expect(content).toMatch(/export class FooEffects/);
-    expect(content).not.toMatch(
-      /loadFoos\$ = this\.actions\$.pipe\(ofType\(FooActionTypes\.LoadFoos/
-    );
+    expect(content).toMatchInlineSnapshot(`
+"import { Injectable } from '@angular/core';
+import { Actions, createEffect } from '@ngrx/effects';
+
+
+
+@Injectable()
+export class FooEffects {
+
+
+  constructor(private actions$: Actions) {}
+}
+"
+`);
   });
 
   it('should create an api effect that describes a source of actions within a feature', async () => {
@@ -368,34 +366,40 @@ describe('Effect Schematic', () => {
     const content = tree.readContent(
       `${projectPath}/src/app/foo/foo.effects.ts`
     );
-    expect(content).toMatch(
-      /import { Actions, Effect, ofType } from '@ngrx\/effects';/
-    );
-    expect(content).toMatch(
-      /import { catchError, map, concatMap } from 'rxjs\/operators';/
-    );
-    expect(content).toMatch(/import { Observable, EMPTY, of } from 'rxjs';/);
-    expect(content).toMatch(
-      /import { LoadFoosFailure, LoadFoosSuccess, FooActionTypes, FooActions } from '\.\/foo.actions';/
-    );
 
-    expect(content).toMatch(/export class FooEffects/);
-    expect(content).toMatch(/loadFoos\$ = this\.actions\$.pipe\(/);
-    expect(content).toMatch(/ofType\(FooActionTypes\.LoadFoos\),/);
-    expect(content).toMatch(/concatMap\(\(\) =>/);
-    expect(content).toMatch(/EMPTY\.pipe\(/);
-    expect(content).toMatch(/map\(data => new LoadFoosSuccess\({ data }\)\),/);
-    expect(content).toMatch(
-      /catchError\(error => of\(new LoadFoosFailure\({ error }\)\)\)\)/
-    );
+    expect(content).toMatchInlineSnapshot(`
+"import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { catchError, map, concatMap } from 'rxjs/operators';
+import { Observable, EMPTY, of } from 'rxjs';
+import * as FooActions from './foo.actions';
 
-    expect(content).toMatch(
-      /constructor\(private actions\$: Actions<FooActions>\) {}/
+
+@Injectable()
+export class FooEffects {
+
+  loadFoos$ = createEffect(() => {
+    return this.actions$.pipe(
+
+      ofType(FooActions.LoadFoos),
+      concatMap(() =>
+        /** An EMPTY observable only emits completion. Replace with your own observable API request */
+        EMPTY.pipe(
+          map(data => FooActions.LoadFoosSuccess({ data })),
+          catchError(error => of(FooActions.LoadFoosFailure({ error }))))
+      )
     );
+  });
+
+
+  constructor(private actions$: Actions) {}
+}
+"
+`);
   });
 
   it('should create an effect using creator function', async () => {
-    const options = { ...defaultOptions, creators: true, feature: true };
+    const options = { ...defaultOptions, feature: true };
 
     const tree = await schematicRunner
       .runSchematicAsync('effect', options, appTree)
@@ -403,54 +407,31 @@ describe('Effect Schematic', () => {
     const content = tree.readContent(
       `${projectPath}/src/app/foo/foo.effects.ts`
     );
-    expect(content).toMatch(
-      /import { Actions, createEffect, ofType } from '@ngrx\/effects';/
-    );
-    expect(content).not.toMatch(/@Effect\(\)/);
-    expect(content).toMatch(
-      /loadFoos\$ = createEffect\(\(\) => {\s* return this.actions\$.pipe\(/
+    expect(content).toMatchInlineSnapshot(`
+"import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+
+import { concatMap } from 'rxjs/operators';
+import { Observable, EMPTY } from 'rxjs';
+import * as FooActions from './foo.actions';
+
+@Injectable()
+export class FooEffects {
+
+
+  loadFoos$ = createEffect(() => {
+    return this.actions$.pipe(
+
+      ofType(FooActions.LoadFoos),
+      /** An EMPTY observable only emits completion. Replace with your own observable API request */
+      concatMap(() => EMPTY as Observable<{ type: string }>)
     );
   });
 
-  it('should use action creators when creators is enabled in a feature', async () => {
-    const options = { ...defaultOptions, creators: true, feature: true };
-
-    const tree = await schematicRunner
-      .runSchematicAsync('effect', options, appTree)
-      .toPromise();
-    const content = tree.readContent(
-      `${projectPath}/src/app/foo/foo.effects.ts`
-    );
-
-    expect(content).toMatch(
-      /import { Actions, createEffect, ofType } from '@ngrx\/effects';/
-    );
-    expect(content).toMatch(/import \* as FooActions from '\.\/foo\.actions';/);
-    expect(content).toMatch(/ofType\(FooActions\.loadFoos\),/);
-  });
-
-  it('should create an api effect using creator function', async () => {
-    const options = {
-      ...defaultOptions,
-      creators: true,
-      api: true,
-      feature: true,
-    };
-
-    const tree = await schematicRunner
-      .runSchematicAsync('effect', options, appTree)
-      .toPromise();
-    const content = tree.readContent(
-      `${projectPath}/src/app/foo/foo.effects.ts`
-    );
-
-    expect(content).toMatch(
-      /import { Actions, createEffect, ofType } from '@ngrx\/effects';/
-    );
-    expect(content).not.toMatch(/@Effect\(\)/);
-    expect(content).toMatch(
-      /loadFoos\$ = createEffect\(\(\) => {\s* return this.actions\$.pipe\(/
-    );
+  constructor(private actions$: Actions) {}
+}
+"
+`);
   });
 
   it('should inject the effect service correctly', async () => {
@@ -462,44 +443,12 @@ describe('Effect Schematic', () => {
       `${projectPath}/src/app/foo/foo.effects.spec.ts`
     );
 
-    expect(content).toMatch(/effects = TestBed\.inject\(FooEffects\);/);
-  });
-
-  it('should add prefix to the effect', async () => {
-    const options = {
-      ...defaultOptions,
-      prefix: 'custom',
-      feature: true,
-      api: true,
-    };
-
-    const tree = await schematicRunner
-      .runSchematicAsync('effect', options, appTree)
-      .toPromise();
-    const content = tree.readContent(
-      `${projectPath}/src/app/foo/foo.effects.ts`
-    );
-
-    expect(content).toMatch(
-      /import { CustomFoosFailure, CustomFoosSuccess, FooActionTypes, FooActions } from '\.\/foo.actions';/
-    );
-
-    expect(content).toMatch(/customFoos\$ = this\.actions\$.pipe\(/);
-    expect(content).toMatch(/ofType\(FooActionTypes\.CustomFoos\),/);
-
-    expect(content).toMatch(
-      /map\(data => new CustomFoosSuccess\({ data }\)\),/
-    );
-
-    expect(content).toMatch(
-      /catchError\(error => of\(new CustomFoosFailure\({ error }\)\)\)\)/
-    );
+    expect(content).toMatchInlineSnapshot();
   });
 
   it('should add prefix to the effect using creator function', async () => {
     const options = {
       ...defaultOptions,
-      creators: true,
       api: true,
       feature: true,
       prefix: 'custom',
@@ -511,19 +460,34 @@ describe('Effect Schematic', () => {
     const content = tree.readContent(
       `${projectPath}/src/app/foo/foo.effects.ts`
     );
+    expect(content).toMatchInlineSnapshot(`
+"import { Injectable } from '@angular/core';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { catchError, map, concatMap } from 'rxjs/operators';
+import { Observable, EMPTY, of } from 'rxjs';
+import * as FooActions from './foo.actions';
 
-    expect(content).toMatch(
-      /customFoos\$ = createEffect\(\(\) => {\s* return this.actions\$.pipe\(/
+
+@Injectable()
+export class FooEffects {
+
+  customFoos$ = createEffect(() => {
+    return this.actions$.pipe(
+
+      ofType(FooActions.CustomFoos),
+      concatMap(() =>
+        /** An EMPTY observable only emits completion. Replace with your own observable API request */
+        EMPTY.pipe(
+          map(data => FooActions.CustomFoosSuccess({ data })),
+          catchError(error => of(FooActions.CustomFoosFailure({ error }))))
+      )
     );
+  });
 
-    expect(content).toMatch(/ofType\(FooActions.customFoos\),/);
 
-    expect(content).toMatch(
-      /map\(data => FooActions.customFoosSuccess\({ data }\)\),/
-    );
-
-    expect(content).toMatch(
-      /catchError\(error => of\(FooActions.customFoosFailure\({ error }\)\)\)\)/
-    );
+  constructor(private actions$: Actions) {}
+}
+"
+`);
   });
 });
