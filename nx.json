@@ -43,8 +43,7 @@
     ]
   },
   "cli": {
-    "analytics": false,
-    "defaultCollection": "@nrwl/angular"
+    "analytics": false
   },
   "generators": {
     "@schematics/angular:component": {
@@ -59,5 +58,6 @@
       "prefix": "bc"
     }
   },
-  "defaultProject": "example-app"
+  "defaultProject": "example-app",
+  "$schema": "./node_modules/nx/schemas/nx-schema.json"
 }
