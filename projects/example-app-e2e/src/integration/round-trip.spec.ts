@@ -38,7 +38,7 @@ context('Full round trip', () => {
   });
 
   it('is possible to add books', () => {
-    cy.get('bc-book-preview').eq(2).click();
+    cy.get('bc-book-preview').eq(1).click();
 
     cy.findByRole('button', { name: /add book to collection/i }).click();
     cy.findByRole('button', { name: /add book to collection/i }).should(
